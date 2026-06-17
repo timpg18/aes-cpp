@@ -241,7 +241,69 @@ void test_encrypt_decrypt_block_roundtrip() {
     assert(decrypted == plaintext);
 }
 
+void test_ctr_mode_roundtrip() {
+    std::array<uint8_t,16> key = {
+        0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,
+        0x08,0x09,0x0a,0x0b,0x0c,0x0d,0x0e,0x0f
+    };
+
+    std::string message = "The quick brown fox jumps over the lazy dog, this is a longer message spanning multiple blocks!";
+
+    auto ciphertext = aes128_encrypt_ctr_mode(message, key);
+    std::string decrypted = aes128_decrypt_ctr_mode(ciphertext, key);
+
+    assert(decrypted == message);
+}
+
+void test_ctr_mode_short_message() {
+    std::array<uint8_t,16> key = {
+        0x2b,0x7e,0x15,0x16,0x28,0xae,0xd2,0xa6,
+        0xab,0xf7,0x15,0x88,0x09,0xcf,0x4f,0x3c
+    };
+
+    std::string message = "hi";  // shorter than one block
+
+    auto ciphertext = aes128_encrypt_ctr_mode(message, key);
+    std::string decrypted = aes128_decrypt_ctr_mode(ciphertext, key);
+
+    assert(decrypted == message);
+}
+
+void test_ctr_mode_empty_message() {
+    std::array<uint8_t,16> key = {
+        0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,
+        0x08,0x09,0x0a,0x0b,0x0c,0x0d,0x0e,0x0f
+    };
+
+    std::string message = "";
+
+    auto ciphertext = aes128_encrypt_ctr_mode(message, key);
+    std::string decrypted = aes128_decrypt_ctr_mode(ciphertext, key);
+
+    assert(decrypted == message);
+}
+
+void test_ctr_mode_boundary_lengths() {
+    std::array<uint8_t,16> key = {
+        0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,
+        0x08,0x09,0x0a,0x0b,0x0c,0x0d,0x0e,0x0f
+    };
+
+    std::vector<size_t> lengths = {15, 16, 17, 31, 32, 33};
+
+    for (size_t len : lengths) {
+        std::string message(len, 'x');  // string of 'x' repeated len times
+
+        auto ciphertext = aes128_encrypt_ctr_mode(message, key);
+        std::string decrypted = aes128_decrypt_ctr_mode(ciphertext, key);
+
+        assert(decrypted == message);
+        assert(decrypted.size() == len);
+    }
+}
+
 int main() {
+    // Tests for aes128 block implementation
     run_test("xtime", test_xtime);
     run_test("gmul", test_gmul);
     run_test("mix_col_word", test_mix_col_word);
@@ -257,6 +319,13 @@ int main() {
     run_test("aes128_encrypt_block",test_aes128_encrypt_block);
     run_test("aes128_decrpyt_block",test_aes128_encrypt_block);
     run_test("encrypt_decrypt_block_roundtrip",test_encrypt_decrypt_block_roundtrip);
+
+    // Test for CTR mode 
+    run_test("ctr_mode_roundtrip",test_ctr_mode_roundtrip); 
+    run_test("ctr_mode_short_message",test_ctr_mode_short_message);
+    run_test("ctr_mode_empty_message",test_ctr_mode_empty_message);
+    run_test("ctr_mode_boundary_lengths",test_ctr_mode_boundary_lengths); 
+
 
 
     std::cout << "\nAll tests passed!\n";

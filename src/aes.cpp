@@ -273,3 +273,63 @@ std::array<uint8_t,16> aes128_decrypt_block(const std::array<uint8_t,16>& cipher
     std::array<uint8_t,16> plaintext = state_to_bytes(state);
     return plaintext;
 }
+
+std::array<uint8_t,8> generate_nonce(){
+    std::array<uint8_t,8> nonce;
+    std::random_device rd;
+    std::mt19937_64 gen(rd());
+    std::uniform_int_distribution<uint16_t> dist(0, 255);
+    for(auto& b : nonce) b = static_cast<uint8_t>(dist(gen));
+    return nonce;
+}
+
+std::array<uint8_t,16> make_counter_block(const std::array<uint8_t,8>& nonce, uint64_t counter){
+    std::array<uint8_t,16> block;
+    for(int i = 0; i < 8; i++) block[i] = nonce[i];
+    for(int i = 0; i < 8; i++) block[8+i] = static_cast<uint8_t>((counter >> (8*(7-i))) & 0xFF);
+    return block;
+}
+
+std::vector<uint8_t> aes128_encrypt_ctr_mode(const std::string& message, const std::array<uint8_t,16>& key){
+    std::vector<uint8_t> bytes(message.begin(),message.end());
+    unsigned long long message_size = bytes.size();
+    std::array<uint8_t,8> nonce = generate_nonce();
+    uint64_t counter = 0;
+    std::vector<uint8_t> ciphertext;
+    ciphertext.resize(message_size + 8);
+    for(size_t i = 0; i < 8; i++) ciphertext[i] = nonce[i];
+
+    size_t index = 8;
+    for(size_t block = 0; block < message_size; block+=16){
+        std::array<uint8_t,16> ctr = make_counter_block(nonce, counter);
+        counter++;
+        std::array<uint8_t,16> encrypted_ctr = aes128_encrypt_block(ctr,key);
+        size_t size = std::min<size_t>(16, message_size - block);
+        for(size_t i = 0; i < size ; i++ ){
+            ciphertext[index++] = encrypted_ctr[i] ^ bytes[block + i];
+        }
+    }
+
+    return ciphertext;
+}
+
+std::string aes128_decrypt_ctr_mode(const std::vector<uint8_t>& ciphertext, const std::array<uint8_t,16>& key){
+    std::array<uint8_t,8> nonce;
+    for(size_t i = 0; i < 8; i++)nonce[i] = ciphertext[i];
+    unsigned long long cipher_size = ciphertext.size() - 8;
+    std::vector<uint8_t> bytes;
+    bytes.resize(cipher_size);
+    uint64_t counter = 0;
+
+    for(size_t block = 0; block < cipher_size; block+=16){
+        std::array<uint8_t,16> ctr = make_counter_block(nonce, counter);
+        counter++;
+        std::array<uint8_t,16> encrypted_ctr = aes128_encrypt_block(ctr,key);
+        size_t size = std::min<size_t>(16, cipher_size - block);
+        for(size_t i = 0; i < size ; i++ ){
+            bytes[block + i] = encrypted_ctr[i] ^ ciphertext[block + i + 8];
+        }
+    }
+    
+    return std::string(bytes.begin(),bytes.end());
+}
