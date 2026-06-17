@@ -71,11 +71,49 @@ Word mix_col(const Word& col){
     return newcol;
 }
 
-State shiftrow(const State& state){
+Word inv_mix_col(const Word& col){
+    uint8_t s0 = col[0];
+    uint8_t s1 = col[1];
+    uint8_t s2 = col[2];
+    uint8_t s3 = col[3];
+
+    std::array<uint8_t,4> newcol;
+    newcol[0] = gmul(0x0e,s0) ^ gmul(0x0b,s1) ^ gmul(0x0d,s2) ^ gmul(0x09,s3);
+    newcol[1] = gmul(0x09,s0) ^ gmul(0x0e,s1) ^ gmul(0x0b,s2) ^ gmul(0x0d,s3);
+    newcol[2] = gmul(0x0d,s0) ^ gmul(0x09,s1) ^ gmul(0x0e,s2) ^ gmul(0x0b,s3);
+    newcol[3] = gmul(0x0b,s0) ^ gmul(0x0d,s1) ^ gmul(0x09,s2) ^ gmul(0x0e,s3);
+
+    return newcol;
+}
+
+State inv_mix_columns(const State& state){
+    State new_state;
+    for(size_t col = 0; col < 4; col++){
+        Word temp = {state[0][col], state[1][col], state[2][col], state[3][col]};
+        temp = inv_mix_col(temp);
+        new_state[0][col] = temp[0];
+        new_state[1][col] = temp[1];
+        new_state[2][col] = temp[2];
+        new_state[3][col] = temp[3];
+    }
+    return new_state;
+}
+
+State shift_row(const State& state){
     State new_state;
     for(size_t row = 0; row<4; row++){
         for(size_t col = 0; col< 4; col++){
             new_state[row][col] = state[row][(row + col) & 3];
+        }
+    }
+    return new_state;
+}
+
+State inv_shift_row(const State& state){
+    State new_state;
+    for(size_t row = 0; row<4; row++){
+        for(size_t col = 0; col< 4; col++){
+            new_state[row][col] = state[row][( 4 + col - row) & 3];
         }
     }
     return new_state;
@@ -205,20 +243,37 @@ std::array<uint8_t,16> aes_encrypt(const std::array<uint8_t,16>& plaintext,const
     state = add_round_key(state, round_key[0]);
     for(size_t round = 1; round < 10; round ++ ){
         state = sub_bytes_state(state);
-        state = shiftrow(state);
+        state = shift_row(state);
         state = mix_columns(state);
         state = add_round_key(state, round_key[round]);
     }
     
     // final round - no mix columns
     state = sub_bytes_state(state);
-    state = shiftrow(state);
+    state = shift_row(state);
     state = add_round_key(state, round_key[10]);
 
     std::array<uint8_t,16> ciphertext = state_to_bytes(state);
     return ciphertext;
 }
 
-std::string aes_decrypt(const std::vector<uint8_t>& cipher,const std::array<uint8_t,16>& key){
+std::array<uint8_t,16> aes_decrypt(const std::array<uint8_t,16>& ciphertext,const std::array<uint8_t,16>& key){
+    std::array<State,11> round_key = key_expansion(key);
+    State state = bytes_to_state(ciphertext);
 
+    state = add_round_key(state,round_key[10]);
+    for(size_t round = 9; round != 0; round--){
+        state = inv_shift_row(state);
+        state = inv_sub_bytes_state(state);
+        state = add_round_key(state,round_key[round]);
+        state = inv_mix_columns(state);
+    }
+
+    // final round — no inv_mix_columns
+    state = inv_shift_row(state);
+    state = inv_sub_bytes_state(state);
+    state = add_round_key(state,round_key[0]);
+
+    std::array<uint8_t,16> plaintext = state_to_bytes(state);
+    return plaintext;
 }
