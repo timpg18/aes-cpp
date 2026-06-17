@@ -38,6 +38,10 @@ static constexpr uint8_t INV_SBOX[256] = {
     0x17,0x2b,0x04,0x7e,0xba,0x77,0xd6,0x26,0xe1,0x69,0x14,0x63,0x55,0x21,0x0c,0x7d
 };
 
+static constexpr uint8_t RCON[10] = {
+    0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1B, 0x36
+};
+
 inline uint8_t xtime(const uint8_t b){
     return (b & 0x80) ? ((b << 1) ^ 0x1B ) : (b<<1);
 }
@@ -52,13 +56,13 @@ inline uint8_t gmul(const uint8_t a,const uint8_t b){
     return res;
 }
 
-std::array<uint8_t,4> mixcol(const std::array<uint8_t,4>& col){
+Word mixcol(const Word& col){
     uint8_t s0 = col[0];
     uint8_t s1 = col[1];
     uint8_t s2 = col[2];
     uint8_t s3 = col[3];
 
-    std::array<uint8_t,4> newcol;
+    Word newcol;
     newcol[0] = gmul(0x02,s0) ^ gmul(0x03,s1) ^ s2 ^ s3;
     newcol[1] = s0 ^ gmul(0x02,s1) ^ gmul(0x03,s2) ^ s3;
     newcol[2] = s0 ^ s1 ^ gmul(0x02,s2) ^ gmul(0x03,s3);
@@ -68,32 +72,97 @@ std::array<uint8_t,4> mixcol(const std::array<uint8_t,4>& col){
 }
 
 State shiftrow(const State& state){
-    State newstate;
+    State new_state;
     for(size_t row = 0; row<4; row++){
         for(size_t col = 0; col< 4; col++){
-            newstate[row][col] = state[row][(row + col) & 3];
+            new_state[row][col] = state[row][(row + col) & 3];
         }
     }
-    return newstate;
+    return new_state;
 }
 
 inline uint8_t sub_bytes(const uint8_t x){return SBOX[x];}
 inline uint8_t inv_sub_bytes(const uint8_t x){return INV_SBOX[x];}
 
 State sub_bytes_state(const State& state) {
-    State newstate;
+    State new_state;
     for(int r = 0; r < 4; r++)
         for(int c = 0; c < 4; c++)
-            newstate[r][c] = sub_bytes(state[r][c]);
-    return newstate;
+            new_state[r][c] = sub_bytes(state[r][c]);
+    return new_state;
 }
 
 State inv_sub_bytes_state(const State& state) {
-    State newstate;
+    State new_state;
     for(int r = 0; r < 4; r++)
         for(int c = 0; c < 4; c++)
-            newstate[r][c] = inv_sub_bytes(state[r][c]);
-    return newstate;
+            new_state[r][c] = inv_sub_bytes(state[r][c]);
+    return new_state;
+}
+
+State add_round_key(const State& state, const State& round_key){
+    State new_state;
+
+    for(size_t row = 0; row < 4; row++){
+        for(size_t col = 0; col < 4; col++){
+            new_state[row][col] = state[row][col] ^ round_key[row][col];
+        }
+    }
+    return new_state;
+}
+
+Word rot_word(const Word& word){
+    Word new_word;
+    new_word[0] = word[1];
+    new_word[1] = word[2];
+    new_word[2] = word[3];
+    new_word[3] = word[0];
+    return new_word;
+}
+
+Word sub_word(const Word& word){
+    Word new_word;
+    new_word[0] = sub_bytes(word[0]);
+    new_word[1] = sub_bytes(word[1]);
+    new_word[2] = sub_bytes(word[2]);
+    new_word[3] = sub_bytes(word[3]);
+    return new_word;
+}
+
+std::array<State,11> key_expansion(const std::array<uint8_t,16>& key){
+    std::array<Word,44> words;
+    for(size_t row = 0; row < 4; row++){
+        for(size_t col = 0; col < 4; col++){
+            words[row][col] = key[4*row + col];
+        }
+    }
+
+    // main loop
+    for(size_t i = 4; i < 44; i++){
+    Word temp = words[i - 1];
+
+    if(i % 4 == 0){
+        temp = rot_word(temp);
+        temp = sub_word(temp);
+        temp[0] ^= RCON[i/4 - 1];
+    }
+
+    for(size_t j = 0; j < 4; j++){
+        words[i][j] = words[i - 4][j] ^ temp[j];
+    }
+}
+
+    // conversion to State
+    std::array<State,11> expanded_key;
+    for( size_t key_no = 0; key_no < 11; key_no++ ){
+        for(size_t col = 0; col < 4; col++){
+            for(size_t row = 0; row < 4; row++){
+                expanded_key[key_no][row][col] = words[key_no*4 + col][row];
+            }
+        }
+    }
+
+    return expanded_key;
 }
 
 std::vector<uint8_t> aes_encrypt(const std::string& message,const std::array<uint8_t,16>& key){
