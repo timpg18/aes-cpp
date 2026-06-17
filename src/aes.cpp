@@ -42,10 +42,7 @@ static constexpr uint8_t RCON[10] = {
     0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1B, 0x36
 };
 
-inline uint8_t xtime(const uint8_t b){
-    return (b & 0x80) ? ((b << 1) ^ 0x1B ) : (b<<1);
-}
-
+inline uint8_t xtime(const uint8_t b){return (b & 0x80) ? ((b << 1) ^ 0x1B ) : (b<<1);}
 inline uint8_t gmul(const uint8_t a,const uint8_t b){
     uint8_t res = 0;
     uint8_t b_curr = b;
@@ -55,8 +52,10 @@ inline uint8_t gmul(const uint8_t a,const uint8_t b){
     }
     return res;
 }
+inline uint8_t sub_bytes(const uint8_t x){return SBOX[x];}
+inline uint8_t inv_sub_bytes(const uint8_t x){return INV_SBOX[x];}
 
-Word mix_col(const Word& col){
+Word mix_col_word(const Word& col){
     uint8_t s0 = col[0];
     uint8_t s1 = col[1];
     uint8_t s2 = col[2];
@@ -71,7 +70,7 @@ Word mix_col(const Word& col){
     return newcol;
 }
 
-Word inv_mix_col(const Word& col){
+Word inv_mix_col_word(const Word& col){
     uint8_t s0 = col[0];
     uint8_t s1 = col[1];
     uint8_t s2 = col[2];
@@ -86,11 +85,24 @@ Word inv_mix_col(const Word& col){
     return newcol;
 }
 
-State inv_mix_columns(const State& state){
+State mix_col_state(const State& state){
+    State new_state;
+    for(size_t word = 0; word < 4; word++){
+        Word temp = Word{state[0][word],state[1][word],state[2][word],state[3][word]};
+        temp = mix_col_word(temp);
+        new_state[0][word] = temp[0];
+        new_state[1][word] = temp[1];
+        new_state[2][word] = temp[2];
+        new_state[3][word] = temp[3];
+    }
+    return new_state;
+}
+
+State inv_mix_col_state(const State& state){
     State new_state;
     for(size_t col = 0; col < 4; col++){
         Word temp = {state[0][col], state[1][col], state[2][col], state[3][col]};
-        temp = inv_mix_col(temp);
+        temp = inv_mix_col_word(temp);
         new_state[0][col] = temp[0];
         new_state[1][col] = temp[1];
         new_state[2][col] = temp[2];
@@ -118,9 +130,6 @@ State inv_shift_row(const State& state){
     }
     return new_state;
 }
-
-inline uint8_t sub_bytes(const uint8_t x){return SBOX[x];}
-inline uint8_t inv_sub_bytes(const uint8_t x){return INV_SBOX[x];}
 
 State sub_bytes_state(const State& state) {
     State new_state;
@@ -177,18 +186,18 @@ std::array<State,11> key_expansion(const std::array<uint8_t,16>& key){
 
     // main loop
     for(size_t i = 4; i < 44; i++){
-    Word temp = words[i - 1];
+        Word temp = words[i - 1];
 
-    if(i % 4 == 0){
-        temp = rot_word(temp);
-        temp = sub_word(temp);
-        temp[0] ^= RCON[i/4 - 1];
-    }
+        if(i % 4 == 0){
+            temp = rot_word(temp);
+            temp = sub_word(temp);
+            temp[0] ^= RCON[i/4 - 1];
+        }
 
-    for(size_t j = 0; j < 4; j++){
-        words[i][j] = words[i - 4][j] ^ temp[j];
+        for(size_t j = 0; j < 4; j++){
+            words[i][j] = words[i - 4][j] ^ temp[j];
+        }
     }
-}
 
     // conversion to State
     std::array<State,11> expanded_key;
@@ -223,20 +232,7 @@ std::array<uint8_t,16> state_to_bytes(const State& state){
     return bytes;
 }
 
-State mix_columns(const State& state){
-    State new_state;
-    for(size_t word = 0; word < 4; word++){
-        Word temp = Word{state[0][word],state[1][word],state[2][word],state[3][word]};
-        temp = mix_col(temp);
-        new_state[0][word] = temp[0];
-        new_state[1][word] = temp[1];
-        new_state[2][word] = temp[2];
-        new_state[3][word] = temp[3];
-    }
-    return new_state;
-}
-
-std::array<uint8_t,16> aes_encrypt(const std::array<uint8_t,16>& plaintext,const std::array<uint8_t,16>& key){
+std::array<uint8_t,16> aes128_encrypt_block(const std::array<uint8_t,16>& plaintext,const std::array<uint8_t,16>& key){
     std::array<State,11> round_key = key_expansion(key);
     State state = bytes_to_state(plaintext);
 
@@ -244,7 +240,7 @@ std::array<uint8_t,16> aes_encrypt(const std::array<uint8_t,16>& plaintext,const
     for(size_t round = 1; round < 10; round ++ ){
         state = sub_bytes_state(state);
         state = shift_row(state);
-        state = mix_columns(state);
+        state = mix_col_state(state);
         state = add_round_key(state, round_key[round]);
     }
     
@@ -257,7 +253,7 @@ std::array<uint8_t,16> aes_encrypt(const std::array<uint8_t,16>& plaintext,const
     return ciphertext;
 }
 
-std::array<uint8_t,16> aes_decrypt(const std::array<uint8_t,16>& ciphertext,const std::array<uint8_t,16>& key){
+std::array<uint8_t,16> aes128_decrypt_block(const std::array<uint8_t,16>& ciphertext,const std::array<uint8_t,16>& key){
     std::array<State,11> round_key = key_expansion(key);
     State state = bytes_to_state(ciphertext);
 
@@ -266,7 +262,7 @@ std::array<uint8_t,16> aes_decrypt(const std::array<uint8_t,16>& ciphertext,cons
         state = inv_shift_row(state);
         state = inv_sub_bytes_state(state);
         state = add_round_key(state,round_key[round]);
-        state = inv_mix_columns(state);
+        state = inv_mix_col_state(state);
     }
 
     // final round — no inv_mix_columns

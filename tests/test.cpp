@@ -23,7 +23,7 @@ void test_gmul() {
     assert(gmul(0x57, 0x13) == 0xfe);
 }
 
-void test_mix_col() {
+void test_mix_col_word() {
     std::array<uint8_t,4> in = {
         0xdb, 0x13, 0x53, 0x45
     };
@@ -32,7 +32,7 @@ void test_mix_col() {
         0x8e, 0x4d, 0xa1, 0xbc
     };
 
-    assert(mix_col(in) == expected);
+    assert(mix_col_word(in) == expected);
 }
 
 void test_shift_row() {
@@ -53,7 +53,7 @@ void test_shift_row() {
     assert(shift_row(in) == expected);
 }
 
-void test_inv_shiftrow() {
+void test_inv_shift_row() {
     State original = {{
         {{0x00,0x44,0x88,0xcc}},
         {{0x11,0x55,0x99,0xdd}},
@@ -155,7 +155,7 @@ void test_state_conversion() {
     assert(s[0][1] == 0x04);
 }
 
-void test_mix_columns() {
+void test_mix_col_state() {
     State in = {{
         {{0xdb,0x00,0x00,0x00}},
         {{0x13,0x00,0x00,0x00}},
@@ -170,10 +170,10 @@ void test_mix_columns() {
         {{0xbc,0x00,0x00,0x00}}
     }};
 
-    assert(mix_columns(in) == expected);
+    assert(mix_col_state(in) == expected);
 }
 
-void test_inv_mix_columns() {
+void test_inv_mix_col_state() {
     State original = {{
         {{0xdb,0xf2,0x01,0xc6}},
         {{0x13,0x0a,0x01,0xc6}},
@@ -181,13 +181,13 @@ void test_inv_mix_columns() {
         {{0x45,0x5c,0x01,0xc6}}
     }};
 
-    State mixed = mix_columns(original);
-    State unmixed = inv_mix_columns(mixed);
+    State mixed = mix_col_state(original);
+    State unmixed = inv_mix_col_state(mixed);
 
     assert(unmixed == original);
 }
 
-void test_aes_encrypt() {
+void test_aes128_encrypt_block() {
     std::array<uint8_t,16> plaintext = {
         0x32,0x43,0xf6,0xa8,0x88,0x5a,0x30,0x8d,
         0x31,0x31,0x98,0xa2,0xe0,0x37,0x07,0x34
@@ -203,10 +203,10 @@ void test_aes_encrypt() {
         0xdc,0x11,0x85,0x97,0x19,0x6a,0x0b,0x32
     };
 
-    assert(aes_encrypt(plaintext, key) == expected);
+    assert(aes128_encrypt_block(plaintext, key) == expected);
 }
 
-void test_aes_decrypt() {
+void test_aes128_decrypt_block() {
     std::array<uint8_t,16> ciphertext = {
         0x39,0x25,0x84,0x1d,0x02,0xdc,0x09,0xfb,
         0xdc,0x11,0x85,0x97,0x19,0x6a,0x0b,0x32
@@ -222,10 +222,10 @@ void test_aes_decrypt() {
         0x31,0x31,0x98,0xa2,0xe0,0x37,0x07,0x34
     };
 
-    assert(aes_decrypt(ciphertext, key) == expected_plaintext);
+    assert(aes128_decrypt_block(ciphertext, key) == expected_plaintext);
 }
 
-void test_encrypt_decrypt_roundtrip() {
+void test_encrypt_decrypt_block_roundtrip() {
     std::array<uint8_t,16> plaintext = {
         0x00,0x11,0x22,0x33,0x44,0x55,0x66,0x77,
         0x88,0x99,0xaa,0xbb,0xcc,0xdd,0xee,0xff
@@ -235,8 +235,8 @@ void test_encrypt_decrypt_roundtrip() {
         0x08,0x09,0x0a,0x0b,0x0c,0x0d,0x0e,0x0f
     };
 
-    auto ciphertext = aes_encrypt(plaintext, key);
-    auto decrypted = aes_decrypt(ciphertext, key);
+    auto ciphertext = aes128_encrypt_block(plaintext, key);
+    auto decrypted = aes128_decrypt_block(ciphertext, key);
 
     assert(decrypted == plaintext);
 }
@@ -244,7 +244,9 @@ void test_encrypt_decrypt_roundtrip() {
 int main() {
     run_test("xtime", test_xtime);
     run_test("gmul", test_gmul);
-    run_test("mix_col", test_mix_col);
+    run_test("mix_col_word", test_mix_col_word);
+    run_test("mix_col_state",test_mix_col_state);
+    run_test("inv_mix_col_state",test_inv_mix_col_state);
     run_test("shift_row", test_shift_row);
     run_test("sub_bytes", test_sub_bytes);
     run_test("add_round_key", test_add_round_key);
@@ -252,11 +254,9 @@ int main() {
     run_test("sub_word",test_sub_word);
     run_test("key_expansion",test_key_expansion);
     run_test("state_conversion",test_state_conversion);
-    run_test("mix_columns",test_mix_columns);
-    run_test("inv_mix_columns",test_inv_mix_columns);
-    run_test("aes_encrypt",test_aes_encrypt);
-    run_test("aes_decrpyt",test_aes_decrypt);
-    run_test("encrypt_decrypt_roundtrip",test_encrypt_decrypt_roundtrip);
+    run_test("aes128_encrypt_block",test_aes128_encrypt_block);
+    run_test("aes128_decrpyt_block",test_aes128_encrypt_block);
+    run_test("encrypt_decrypt_block_roundtrip",test_encrypt_decrypt_block_roundtrip);
 
 
     std::cout << "\nAll tests passed!\n";
