@@ -23,7 +23,7 @@ void test_gmul() {
     assert(gmul(0x57, 0x13) == 0xfe);
 }
 
-void test_mixcol() {
+void test_mix_col() {
     std::array<uint8_t,4> in = {
         0xdb, 0x13, 0x53, 0x45
     };
@@ -32,7 +32,7 @@ void test_mixcol() {
         0x8e, 0x4d, 0xa1, 0xbc
     };
 
-    assert(mixcol(in) == expected);
+    assert(mix_col(in) == expected);
 }
 
 void test_shiftrow() {
@@ -124,16 +124,53 @@ void test_key_expansion() {
     assert(round_keys[1] == expected_rk1);
 }
 
+void test_state_conversion() {
+    std::array<uint8_t,16> in = {
+        0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,
+        0x08,0x09,0x0a,0x0b,0x0c,0x0d,0x0e,0x0f
+    };
+    State s = bytes_to_state(in);
+    auto out = state_to_bytes(s);
+    assert(in == out);
+
+    // verify actual column-wise layout
+    assert(s[0][0] == 0x00);
+    assert(s[1][0] == 0x01);
+    assert(s[2][0] == 0x02);
+    assert(s[3][0] == 0x03);
+    assert(s[0][1] == 0x04);
+}
+
+void test_mix_columns() {
+    State in = {{
+        {{0xdb,0x00,0x00,0x00}},
+        {{0x13,0x00,0x00,0x00}},
+        {{0x53,0x00,0x00,0x00}},
+        {{0x45,0x00,0x00,0x00}}
+    }};
+
+    State expected = {{
+        {{0x8e,0x00,0x00,0x00}},
+        {{0x4d,0x00,0x00,0x00}},
+        {{0xa1,0x00,0x00,0x00}},
+        {{0xbc,0x00,0x00,0x00}}
+    }};
+
+    assert(mix_columns(in) == expected);
+}
+
 int main() {
     run_test("xtime", test_xtime);
     run_test("gmul", test_gmul);
-    run_test("mixcol", test_mixcol);
+    run_test("mix_col", test_mix_col);
     run_test("shiftrow", test_shiftrow);
     run_test("sub_bytes", test_sub_bytes);
     run_test("add_round_key", test_add_round_key);
     run_test("rot_word",test_rot_word);
     run_test("sub_word",test_sub_word);
     run_test("key_expansion",test_key_expansion);
+    run_test("state_conversion",test_state_conversion);
+    run_test("mix_columns",test_mix_columns);
 
 
     std::cout << "\nAll tests passed!\n";

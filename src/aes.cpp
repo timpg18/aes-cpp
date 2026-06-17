@@ -56,7 +56,7 @@ inline uint8_t gmul(const uint8_t a,const uint8_t b){
     return res;
 }
 
-Word mixcol(const Word& col){
+Word mix_col(const Word& col){
     uint8_t s0 = col[0];
     uint8_t s1 = col[1];
     uint8_t s2 = col[2];
@@ -163,6 +163,39 @@ std::array<State,11> key_expansion(const std::array<uint8_t,16>& key){
     }
 
     return expanded_key;
+}
+
+State bytes_to_state(const std::array<uint8_t,16>& bytes){
+    State state;
+    for(size_t col = 0; col < 4; col++){
+        for(size_t row = 0; row < 4; row++){
+            state[row][col] = bytes[row + 4 * col];
+        }
+    }
+    return state;
+}
+
+std::array<uint8_t,16> state_to_bytes(const State& state){
+    std::array<uint8_t,16> bytes;
+    for(size_t col = 0; col < 4; col++){
+        for(size_t row = 0; row < 4; row++){
+            bytes[row + 4 * col] = state[row][col];
+        }
+    }
+    return bytes;
+}
+
+State mix_columns(const State& state){
+    State new_state;
+    for(size_t word = 0; word < 4; word++){
+        Word temp = Word{state[0][word],state[1][word],state[2][word],state[3][word]};
+        temp = mix_col(temp);
+        new_state[0][word] = temp[0];
+        new_state[1][word] = temp[1];
+        new_state[2][word] = temp[2];
+        new_state[3][word] = temp[3];
+    }
+    return new_state;
 }
 
 std::vector<uint8_t> aes_encrypt(const std::string& message,const std::array<uint8_t,16>& key){
