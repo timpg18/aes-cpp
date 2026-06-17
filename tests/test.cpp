@@ -302,6 +302,23 @@ void test_ctr_mode_boundary_lengths() {
     }
 }
 
+void test_ctr_mode_binary_data() {
+    std::array<uint8_t,16> key = {
+        0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,
+        0x08,0x09,0x0a,0x0b,0x0c,0x0d,0x0e,0x0f
+    };
+
+    std::string s;
+    for(int i = 0; i < 256; i++)
+        s.push_back(static_cast<char>(i));
+
+    auto ciphertext = aes128_encrypt_ctr_mode(s, key);
+    std::string decrypted = aes128_decrypt_ctr_mode(ciphertext, key);
+
+    assert(decrypted.size() == s.size());
+    assert(decrypted == s);
+}
+
 int main() {
     // Tests for aes128 block implementation
     run_test("xtime", test_xtime);
@@ -325,6 +342,7 @@ int main() {
     run_test("ctr_mode_short_message",test_ctr_mode_short_message);
     run_test("ctr_mode_empty_message",test_ctr_mode_empty_message);
     run_test("ctr_mode_boundary_lengths",test_ctr_mode_boundary_lengths); 
+    run_test("ctr_mode_binary_data",test_ctr_mode_binary_data);
 
 
 
