@@ -198,8 +198,25 @@ State mix_columns(const State& state){
     return new_state;
 }
 
-std::vector<uint8_t> aes_encrypt(const std::string& message,const std::array<uint8_t,16>& key){
+std::array<uint8_t,16> aes_encrypt(const std::array<uint8_t,16>& plaintext,const std::array<uint8_t,16>& key){
+    std::array<State,11> round_key = key_expansion(key);
+    State state = bytes_to_state(plaintext);
+
+    state = add_round_key(state, round_key[0]);
+    for(size_t round = 1; round < 10; round ++ ){
+        state = sub_bytes_state(state);
+        state = shiftrow(state);
+        state = mix_columns(state);
+        state = add_round_key(state, round_key[round]);
+    }
     
+    // final round - no mix columns
+    state = sub_bytes_state(state);
+    state = shiftrow(state);
+    state = add_round_key(state, round_key[10]);
+
+    std::array<uint8_t,16> ciphertext = state_to_bytes(state);
+    return ciphertext;
 }
 
 std::string aes_decrypt(const std::vector<uint8_t>& cipher,const std::array<uint8_t,16>& key){

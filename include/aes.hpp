@@ -21,5 +21,5 @@ State bytes_to_state(const std::array<uint8_t,16>& bytes);
 std::array<uint8_t,16> state_to_bytes(const State& state);
 State mix_columns(const State& state);
 
-std::vector<uint8_t> aes_encrypt(const std::string& message, const std::array<uint8_t,16>& key);
+std::array<uint8_t,16> aes_encrypt(const std::array<uint8_t,16>& plaintext,const std::array<uint8_t,16>& key);
 std::string aes_decrypt(const std::vector<uint8_t>& cipher, const std::array<uint8_t,16>& key);
