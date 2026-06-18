@@ -42,8 +42,8 @@ static constexpr uint8_t RCON[10] = {
     0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1B, 0x36
 };
 
-uint8_t sub_bytes(const uint8_t x){return SBOX[x];}
-uint8_t inv_sub_bytes(const uint8_t x){return INV_SBOX[x];}
+inline uint8_t sub_bytes(const uint8_t x){return SBOX[x];}
+inline uint8_t inv_sub_bytes(const uint8_t x){return INV_SBOX[x];}
 
 constexpr std::array<uint8_t,256> make_mul_table(uint8_t multiplier){
     std::array<uint8_t,256> table{};
@@ -60,24 +60,9 @@ static constexpr std::array<uint8_t,256> MUL11 = make_mul_table(0x0b);
 static constexpr std::array<uint8_t,256> MUL13 = make_mul_table(0x0d);
 static constexpr std::array<uint8_t,256> MUL14 = make_mul_table(0x0e);
 
-// original
-Word mix_col_word(const Word& col){
-    uint8_t s0 = col[0];
-    uint8_t s1 = col[1];
-    uint8_t s2 = col[2];
-    uint8_t s3 = col[3];
-
-    Word newcol;
-    newcol[0] = gmul(0x02,s0) ^ gmul(0x03,s1) ^ s2 ^ s3;
-    newcol[1] = s0 ^ gmul(0x02,s1) ^ gmul(0x03,s2) ^ s3;
-    newcol[2] = s0 ^ s1 ^ gmul(0x02,s2) ^ gmul(0x03,s3);
-    newcol[3] = gmul(0x03,s0) ^ s1 ^ s2 ^ gmul(0x02,s3);
-
-    return newcol;
-}
 
 // new
-Word mix_col_word_fast(const Word& col){
+Word mix_col_word(const Word& col){
     uint8_t s0 = col[0];
     uint8_t s1 = col[1];
     uint8_t s2 = col[2];
@@ -93,21 +78,6 @@ Word mix_col_word_fast(const Word& col){
 }
 
 Word inv_mix_col_word(const Word& col){
-    uint8_t s0 = col[0];
-    uint8_t s1 = col[1];
-    uint8_t s2 = col[2];
-    uint8_t s3 = col[3];
-
-    std::array<uint8_t,4> newcol;
-    newcol[0] = gmul(0x0e,s0) ^ gmul(0x0b,s1) ^ gmul(0x0d,s2) ^ gmul(0x09,s3);
-    newcol[1] = gmul(0x09,s0) ^ gmul(0x0e,s1) ^ gmul(0x0b,s2) ^ gmul(0x0d,s3);
-    newcol[2] = gmul(0x0d,s0) ^ gmul(0x09,s1) ^ gmul(0x0e,s2) ^ gmul(0x0b,s3);
-    newcol[3] = gmul(0x0b,s0) ^ gmul(0x0d,s1) ^ gmul(0x09,s2) ^ gmul(0x0e,s3);
-
-    return newcol;
-}
-
-Word inv_mix_col_word_fast(const Word& col){
     uint8_t s0 = col[0];
     uint8_t s1 = col[1];
     uint8_t s2 = col[2];
@@ -135,19 +105,6 @@ State mix_col_state(const State& state){
     return new_state;
 }
 
-State mix_col_state_fast(const State& state){
-    State new_state;
-    for(size_t word = 0; word < 4; word++){
-        Word temp = Word{state[0][word],state[1][word],state[2][word],state[3][word]};
-        temp = mix_col_word_fast(temp);
-        new_state[0][word] = temp[0];
-        new_state[1][word] = temp[1];
-        new_state[2][word] = temp[2];
-        new_state[3][word] = temp[3];
-    }
-    return new_state;
-}
-
 State inv_mix_col_state(const State& state){
     State new_state;
     for(size_t col = 0; col < 4; col++){
@@ -161,30 +118,7 @@ State inv_mix_col_state(const State& state){
     return new_state;
 }
 
-State inv_mix_col_state_fast(const State& state){
-    State new_state;
-    for(size_t col = 0; col < 4; col++){
-        Word temp = {state[0][col], state[1][col], state[2][col], state[3][col]};
-        temp = inv_mix_col_word_fast(temp);
-        new_state[0][col] = temp[0];
-        new_state[1][col] = temp[1];
-        new_state[2][col] = temp[2];
-        new_state[3][col] = temp[3];
-    }
-    return new_state;
-}
-
 State shift_row(const State& state){
-    State new_state;
-    for(size_t row = 0; row<4; row++){
-        for(size_t col = 0; col< 4; col++){
-            new_state[row][col] = state[row][(row + col) & 3];
-        }
-    }
-    return new_state;
-}
-
-State shift_row_fast(const State& state){
     State new_state;
 
     // row 0: no shift
@@ -216,11 +150,31 @@ State shift_row_fast(const State& state){
 
 State inv_shift_row(const State& state){
     State new_state;
-    for(size_t row = 0; row<4; row++){
-        for(size_t col = 0; col< 4; col++){
-            new_state[row][col] = state[row][( 4 + col - row) & 3];
-        }
-    }
+
+    // row 0: no shift
+    new_state[0][0] = state[0][0];
+    new_state[0][1] = state[0][1];
+    new_state[0][2] = state[0][2];
+    new_state[0][3] = state[0][3];
+
+    // row 1: shift right by 1
+    new_state[1][0] = state[1][3];
+    new_state[1][1] = state[1][0];
+    new_state[1][2] = state[1][1];
+    new_state[1][3] = state[1][2];
+
+    // row 2: shift right by 2
+    new_state[2][0] = state[2][2];
+    new_state[2][1] = state[2][3];
+    new_state[2][2] = state[2][0];
+    new_state[2][3] = state[2][1];
+
+    // row 3: shift right by 3 (= left by 1)
+    new_state[3][0] = state[3][1];
+    new_state[3][1] = state[3][2];
+    new_state[3][2] = state[3][3];
+    new_state[3][3] = state[3][0];
+
     return new_state;
 }
 
@@ -332,7 +286,7 @@ std::array<uint8_t,16> aes128_encrypt_block(const std::array<uint8_t,16>& plaint
     for(size_t round = 1; round < 10; round ++ ){
         state = sub_bytes_state(state);
         state = shift_row(state);
-        state = mix_col_state_fast(state);
+        state = mix_col_state(state);
         state = add_round_key(state, round_key[round]);
     }
     
@@ -353,7 +307,7 @@ std::array<uint8_t,16> aes128_decrypt_block(const std::array<uint8_t,16>& cipher
         state = inv_shift_row(state);
         state = inv_sub_bytes_state(state);
         state = add_round_key(state,round_key[round]);
-        state = inv_mix_col_state_fast(state);
+        state = inv_mix_col_state(state);
     }
 
     // final round — no inv_mix_columns
