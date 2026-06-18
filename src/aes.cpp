@@ -295,15 +295,14 @@ std::array<uint8_t,16> state_to_bytes(const State& state){
     return bytes;
 }
 
-std::array<uint8_t,16> aes128_encrypt_block(const std::array<uint8_t,16>& plaintext,const std::array<uint8_t,16>& key){
-    std::array<State,11> round_key = key_expansion(key);
+std::array<uint8_t,16> aes128_encrypt_block(const std::array<uint8_t,16>& plaintext,const std::array<State,11>& round_key){
     State state = bytes_to_state(plaintext);
 
     state = add_round_key(state, round_key[0]);
     for(size_t round = 1; round < 10; round ++ ){
         state = sub_bytes_state(state);
         state = shift_row(state);
-        state = mix_col_state(state);
+        state = mix_col_state_fast(state);
         state = add_round_key(state, round_key[round]);
     }
     
@@ -316,8 +315,7 @@ std::array<uint8_t,16> aes128_encrypt_block(const std::array<uint8_t,16>& plaint
     return ciphertext;
 }
 
-std::array<uint8_t,16> aes128_decrypt_block(const std::array<uint8_t,16>& ciphertext,const std::array<uint8_t,16>& key){
-    std::array<State,11> round_key = key_expansion(key);
+std::array<uint8_t,16> aes128_decrypt_block(const std::array<uint8_t,16>& ciphertext,const std::array<State,11>& round_key){
     State state = bytes_to_state(ciphertext);
 
     state = add_round_key(state,round_key[10]);
@@ -325,7 +323,7 @@ std::array<uint8_t,16> aes128_decrypt_block(const std::array<uint8_t,16>& cipher
         state = inv_shift_row(state);
         state = inv_sub_bytes_state(state);
         state = add_round_key(state,round_key[round]);
-        state = inv_mix_col_state(state);
+        state = inv_mix_col_state_fast(state);
     }
 
     // final round — no inv_mix_columns
@@ -356,6 +354,9 @@ std::array<uint8_t,16> make_counter_block(const std::array<uint8_t,8>& nonce, ui
 std::vector<uint8_t> aes128_encrypt_ctr_mode(const std::string& message, const std::array<uint8_t,16>& key){
     std::vector<uint8_t> bytes(message.begin(),message.end());
     unsigned long long message_size = bytes.size();
+
+    std::array<State,11> round_key = key_expansion(key);
+
     std::array<uint8_t,8> nonce = generate_nonce();
     uint64_t counter = 0;
     std::vector<uint8_t> ciphertext;
@@ -366,7 +367,7 @@ std::vector<uint8_t> aes128_encrypt_ctr_mode(const std::string& message, const s
     for(size_t block = 0; block < message_size; block+=16){
         std::array<uint8_t,16> ctr = make_counter_block(nonce, counter);
         counter++;
-        std::array<uint8_t,16> encrypted_ctr = aes128_encrypt_block(ctr,key);
+        std::array<uint8_t,16> encrypted_ctr = aes128_encrypt_block(ctr,round_key);
         size_t size = std::min<size_t>(16, message_size - block);
         for(size_t i = 0; i < size ; i++ ){
             ciphertext[index++] = encrypted_ctr[i] ^ bytes[block + i];
@@ -380,6 +381,9 @@ std::string aes128_decrypt_ctr_mode(const std::vector<uint8_t>& ciphertext, cons
     std::array<uint8_t,8> nonce;
     for(size_t i = 0; i < 8; i++)nonce[i] = ciphertext[i];
     unsigned long long cipher_size = ciphertext.size() - 8;
+
+    std::array<State,11> round_key = key_expansion(key);
+
     std::vector<uint8_t> bytes;
     bytes.resize(cipher_size);
     uint64_t counter = 0;
@@ -387,7 +391,7 @@ std::string aes128_decrypt_ctr_mode(const std::vector<uint8_t>& ciphertext, cons
     for(size_t block = 0; block < cipher_size; block+=16){
         std::array<uint8_t,16> ctr = make_counter_block(nonce, counter);
         counter++;
-        std::array<uint8_t,16> encrypted_ctr = aes128_encrypt_block(ctr,key);
+        std::array<uint8_t,16> encrypted_ctr = aes128_encrypt_block(ctr,round_key);
         size_t size = std::min<size_t>(16, cipher_size - block);
         for(size_t i = 0; i < size ; i++ ){
             bytes[block + i] = encrypted_ctr[i] ^ ciphertext[block + i + 8];

@@ -7,6 +7,7 @@ int main(){
         0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,
         0x08,0x09,0x0a,0x0b,0x0c,0x0d,0x0e,0x0f
     };
+    std::array<State,11> round_key = key_expansion(key);
 
     std::array<uint8_t,16> block = {
         0x32,0x43,0xf6,0xa8,0x88,0x5a,0x30,0x8d,
@@ -14,7 +15,7 @@ int main(){
     };
 
     // warmup
-    auto result = aes128_encrypt_block(block, key);
+    auto result = aes128_encrypt_block(block, round_key);
 
     const size_t iterations = 10'000'000;
 
@@ -22,7 +23,7 @@ int main(){
 
     uint8_t checksum = 0;
     for(size_t i = 0; i < iterations; i++){
-        result = aes128_encrypt_block(result, key);
+        result = aes128_encrypt_block(result, round_key);
         checksum ^= result[0];
     }
 

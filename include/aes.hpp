@@ -44,8 +44,8 @@ State bytes_to_state(const std::array<uint8_t,16>& bytes);
 std::array<uint8_t,16> state_to_bytes(const State& state);
 State inv_shift_row(const State& state);
 
-std::array<uint8_t,16> aes128_encrypt_block(const std::array<uint8_t,16>& plaintext,const std::array<uint8_t,16>& key);
-std::array<uint8_t,16> aes128_decrypt_block(const std::array<uint8_t,16>& ciphertext,const std::array<uint8_t,16>& key);
+std::array<uint8_t,16> aes128_encrypt_block(const std::array<uint8_t,16>& plaintext,const std::array<State,11>& round_key);
+std::array<uint8_t,16> aes128_decrypt_block(const std::array<uint8_t,16>& ciphertext,const std::array<State,11>& round_key);
 
 std::vector<uint8_t> aes128_encrypt_ctr_mode(const std::string& message, const std::array<uint8_t,16>& key);
 std::string aes128_decrypt_ctr_mode(const std::vector<uint8_t>& ciphertext, const std::array<uint8_t,16>& key);

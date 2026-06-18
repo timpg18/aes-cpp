@@ -203,7 +203,9 @@ void test_aes128_encrypt_block() {
         0xdc,0x11,0x85,0x97,0x19,0x6a,0x0b,0x32
     };
 
-    assert(aes128_encrypt_block(plaintext, key) == expected);
+    std::array<State,11> round_key = key_expansion(key);
+
+    assert(aes128_encrypt_block(plaintext, round_key) == expected);
 }
 
 void test_aes128_decrypt_block() {
@@ -222,7 +224,10 @@ void test_aes128_decrypt_block() {
         0x31,0x31,0x98,0xa2,0xe0,0x37,0x07,0x34
     };
 
-    assert(aes128_decrypt_block(ciphertext, key) == expected_plaintext);
+
+    std::array<State,11> round_key = key_expansion(key);
+
+    assert(aes128_decrypt_block(ciphertext, round_key) == expected_plaintext);
 }
 
 void test_encrypt_decrypt_block_roundtrip() {
@@ -235,8 +240,9 @@ void test_encrypt_decrypt_block_roundtrip() {
         0x08,0x09,0x0a,0x0b,0x0c,0x0d,0x0e,0x0f
     };
 
-    auto ciphertext = aes128_encrypt_block(plaintext, key);
-    auto decrypted = aes128_decrypt_block(ciphertext, key);
+    std::array<State,11> round_key = key_expansion(key);
+    auto ciphertext = aes128_encrypt_block(plaintext, round_key);
+    auto decrypted = aes128_decrypt_block(ciphertext, round_key);
 
     assert(decrypted == plaintext);
 }
