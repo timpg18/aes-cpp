@@ -348,6 +348,16 @@ void test_inv_mix_col_fast_matches_original() {
     assert(inv_mix_col_word(in3) == inv_mix_col_word_fast(in3));
 }
 
+void test_shift_row_fast_matches_original() {
+    State in = {{
+        {{0x00,0x44,0x88,0xcc}},
+        {{0x11,0x55,0x99,0xdd}},
+        {{0x22,0x66,0xaa,0xee}},
+        {{0x33,0x77,0xbb,0xff}}
+    }};
+    assert(shift_row(in) == shift_row_fast(in));
+}
+
 int main() {
     // Tests for aes128 block implementation
     run_test("xtime", test_xtime);
@@ -376,6 +386,7 @@ int main() {
     // Test for new function
     run_test("mix_col_fast_matches_original",test_mix_col_fast_matches_original);
     run_test("inv_mix_col_fast_matches_original",test_inv_mix_col_fast_matches_original);
+    run_test("shift_row_fast_matches_original",test_shift_row_fast_matches_original);
 
 
 

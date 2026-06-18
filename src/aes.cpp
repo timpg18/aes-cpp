@@ -184,6 +184,36 @@ State shift_row(const State& state){
     return new_state;
 }
 
+State shift_row_fast(const State& state){
+    State new_state;
+
+    // row 0: no shift
+    new_state[0][0] = state[0][0];
+    new_state[0][1] = state[0][1];
+    new_state[0][2] = state[0][2];
+    new_state[0][3] = state[0][3];
+
+    // row 1: shift left by 1
+    new_state[1][0] = state[1][1];
+    new_state[1][1] = state[1][2];
+    new_state[1][2] = state[1][3];
+    new_state[1][3] = state[1][0];
+
+    // row 2: shift left by 2
+    new_state[2][0] = state[2][2];
+    new_state[2][1] = state[2][3];
+    new_state[2][2] = state[2][0];
+    new_state[2][3] = state[2][1];
+
+    // row 3: shift left by 3
+    new_state[3][0] = state[3][3];
+    new_state[3][1] = state[3][0];
+    new_state[3][2] = state[3][1];
+    new_state[3][3] = state[3][2];
+
+    return new_state;
+}
+
 State inv_shift_row(const State& state){
     State new_state;
     for(size_t row = 0; row<4; row++){

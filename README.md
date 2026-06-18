@@ -102,3 +102,40 @@ The test suite verifies:
 ## Security Note
 
 This is an educational implementation built to understand AES internals at the bit level. It has not been audited, includes no protection against timing side-channel attacks, and should not be used to protect real sensitive data. For production use, rely on audited libraries such as OpenSSL or libsodium.
+
+## Performance Optimization
+
+After the initial correct implementation, a profiling pass was done to identify and fix real bottlenecks rather than guessing.
+
+### Methodology
+
+Manual timing harnesses (`benchmark.cpp`, `profile2.cpp`) were used instead of `perf`, since `perf` was unavailable both in WSL2 (kernel mismatch) and GitHub Codespaces (no host kernel access in the container). All comparisons were run in GitHub Codespaces specifically, after the same benchmark on a local laptop produced inconsistent run-to-run results due to CPU frequency scaling and background load — a reminder that benchmarking on a noisy machine produces numbers you can't trust.
+
+### Finding 1 — MixColumns was the single most expensive operation
+
+Isolated timing of the four core round operations (SubBytes, ShiftRows, MixColumns, AddRoundKey) showed MixColumns consistently accounting for ~59-63% of their combined time, roughly 4x the cost of any other single operation. This was because MixColumns called a general-purpose GF(2^8) multiplication function (`gmul`) at runtime, which loops over 8 bits with a branch per bit.
+
+**Fix:** Replaced runtime `gmul` calls with precomputed lookup tables (`MUL2`, `MUL3`, `MUL9`, `MUL11`, `MUL13`, `MUL14`), one per multiplication constant used in MixColumns/InvMixColumns. These tables are generated entirely at compile time using `constexpr` functions, so there is zero runtime cost to building them — the 256-entry tables are baked directly into the binary.
+
+**Result:** ~2.5-3x speedup on MixColumns in isolation, verified for correctness against the original implementation (which is kept in the codebase for comparison) using both the FIPS 197 test vector and additional sample inputs.
+
+### Finding 2 — key expansion was being redundantly recomputed
+
+The original block encrypt/decrypt functions took the raw 16-byte key and called `key_expansion` internally on every single call. Since a real caller typically encrypts many blocks under the same key, this meant the full 11-round-key schedule (involving RotWord, SubWord, and S-box lookups) was being regenerated from scratch for every 16 bytes of data — far more expensive than any single round operation.
+
+**Fix:** Changed `aes128_encrypt_block`/`aes128_decrypt_block` to accept the already-expanded round keys (`std::array<State,11>`) rather than the raw key, mirroring how real cipher libraries separate key setup from per-block encryption (e.g. OpenSSL's `AES_set_encrypt_key` followed by repeated `AES_encrypt` calls).
+
+**Result:** This was the larger architectural fix of the two, removing per-call overhead that scaled with how many blocks were encrypted under one key.
+
+### Finding 3 — not all "obvious" optimizations help
+
+Manual loop unrolling was tried on `shift_row`, replacing the loop-and-modulo version with 16 direct, hardcoded assignments. This produced no measurable improvement (within noise of the original). The likely explanation: GCC at `-O3` already aggressively unrolls small, fixed-bound loops like this one, so the hand-written version gave the compiler no new information. This was a useful negative result — it showed that optimization effort is best spent on operations with genuinely different algorithmic cost (like replacing an 8-iteration branchy loop with a table lookup), not on fighting a compiler that's already doing its job.
+
+### Net result
+
+| Stage | Throughput (single block, chained) |
+|---|---|
+| Original implementation | ~31 MB/s |
+| After MixColumns tables + key expansion fix | ~43 MB/s |
+
+For reference, OpenSSL's hardware-accelerated AES-NI implementation on the same class of CPU reaches ~1200+ MB/s for the same block size — a reminder that the real performance gap between software AES and hardware AES instructions is roughly 30x, and closing that gap further would require moving to AES-NI compiler intrinsics rather than further software-level tuning.

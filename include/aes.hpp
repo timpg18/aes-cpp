@@ -25,13 +25,16 @@ Word inv_mix_col_word(const Word& col);
 State mix_col_state(const State& state);
 State inv_mix_col_state(const State& state);
 
+State shift_row(const State& state);
+
 // New for implementation
 Word mix_col_word_fast(const Word& col);
 State mix_col_state_fast(const State& state);
 Word inv_mix_col_word_fast(const Word& col);
 State inv_mix_col_state_fast(const State& state);
 
-State shift_row(const State& state);
+State shift_row_fast(const State& state);
+
 uint8_t sub_bytes(const uint8_t x);
 uint8_t inv_sub_bytes(const uint8_t x);
 State sub_bytes_state(const State& state);
