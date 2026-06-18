@@ -365,8 +365,9 @@ std::array<uint8_t,16> aes128_decrypt_block(const std::array<uint8_t,16>& cipher
     return plaintext;
 }
 
-std::array<uint8_t,8> generate_nonce(){
-    std::array<uint8_t,8> nonce;
+template<uint8_t N>
+std::array<uint8_t,N> generate_nonce(){
+    std::array<uint8_t,N> nonce;
     std::random_device rd;
     std::mt19937_64 gen(rd());
     std::uniform_int_distribution<uint16_t> dist(0, 255);
@@ -381,13 +382,27 @@ std::array<uint8_t,16> make_counter_block(const std::array<uint8_t,8>& nonce, ui
     return block;
 }
 
+void pkcs7_pad(std::vector<uint8_t>& bytes){
+    size_t original_size = bytes.size(); 
+    uint8_t pad_needed = static_cast<uint8_t>(16 - (original_size & 15));
+    bytes.resize(original_size + pad_needed);
+    for(size_t i = 0; i < pad_needed; i++){
+        bytes[original_size + i] = pad_needed;
+    }
+}
+
+void pkcs7_unpad(std::vector<uint8_t>& bytes){
+    uint8_t original_pad = bytes[bytes.size() - 1];
+    bytes.resize(bytes.size() - original_pad);
+}
+
 std::vector<uint8_t> aes128_encrypt_ctr_mode(const std::string& message, const std::array<uint8_t,16>& key){
     std::vector<uint8_t> bytes(message.begin(),message.end());
     unsigned long long message_size = bytes.size();
 
     std::array<State,11> round_key = key_expansion(key);
 
-    std::array<uint8_t,8> nonce = generate_nonce();
+    std::array<uint8_t,8> nonce = generate_nonce<8>();
     uint64_t counter = 0;
     std::vector<uint8_t> ciphertext;
     ciphertext.resize(message_size + 8);
@@ -429,4 +444,52 @@ std::string aes128_decrypt_ctr_mode(const std::vector<uint8_t>& ciphertext, cons
     }
     
     return std::string(bytes.begin(),bytes.end());
+}
+
+std::vector<uint8_t> aes128_encrypt_cbc_mode(const std::string& message, const std::array<uint8_t,16>& key){
+    std::vector<uint8_t> bytes(message.begin(),message.end());
+    std::array<State,11> round_key = key_expansion(key);
+    std::array<uint8_t,16> IV = generate_nonce<16>();
+    pkcs7_pad(bytes);
+    size_t padded_length = bytes.size();
+
+    std::vector<uint8_t> ciphertext;
+    ciphertext.resize(16 + padded_length);
+    for(size_t i = 0; i < 16; i++)ciphertext[i] = IV[i];
+
+    std::array<uint8_t,16> prev = IV ;
+    std::array<uint8_t,16> curr;
+    for(size_t block = 0; block < padded_length; block+=16){
+        for(size_t i = 0; i < 16; i++)curr[i] = bytes[block + i] ^ prev[i];
+        curr = aes128_encrypt_block(curr,round_key);
+        for(size_t i = 0; i < 16; i++)ciphertext[16 + block + i] = curr[i];
+        prev = curr;
+    }
+
+    return ciphertext;
+}
+
+std::string aes128_decrypt_cbc_mode(const std::vector<uint8_t>& ciphertext, const std::array<uint8_t,16>& key){
+    size_t original_size = ciphertext.size() - 16;
+    std::array<uint8_t,16> IV;
+    for(size_t i = 0; i < 16; i++)IV[i] = ciphertext[i];
+    std::vector<uint8_t> plaintext;
+    plaintext.resize(original_size);
+
+    std::array<State,11> round_key = key_expansion(key);
+
+    std::array<uint8_t,16> prev = IV;
+    std::array<uint8_t,16> curr;
+    std::array<uint8_t,16> ciphertext_block;
+
+    for(size_t block = 0; block < original_size; block+=16){
+        for(size_t i = 0; i < 16; i++)ciphertext_block[i] = ciphertext[block + 16 + i];
+        curr = aes128_decrypt_block(ciphertext_block,round_key);
+
+        for(size_t i = 0; i < 16; i++)plaintext[block + i] = curr[i] ^ prev[i];
+        prev = ciphertext_block;
+    }
+
+    pkcs7_unpad(plaintext);
+    return std::string(plaintext.begin(),plaintext.end());
 }

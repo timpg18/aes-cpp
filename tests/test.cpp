@@ -358,6 +358,152 @@ void test_shift_row_fast_matches_original() {
     assert(shift_row(in) == shift_row_fast(in));
 }
 
+void test_pkcs7_pad_empty() {
+    std::vector<uint8_t> bytes;
+    pkcs7_pad(bytes);
+    assert(bytes.size() == 16);
+    for(auto b : bytes) assert(b == 0x10);
+}
+
+void test_pkcs7_pad_exact_block() {
+    std::vector<uint8_t> bytes(16, 0xAA);
+    pkcs7_pad(bytes);
+    assert(bytes.size() == 32);
+    for(size_t i = 16; i < 32; i++) assert(bytes[i] == 0x10);
+}
+
+void test_pkcs7_pad_15_bytes() {
+    std::vector<uint8_t> bytes(15, 0xAA);
+    pkcs7_pad(bytes);
+    assert(bytes.size() == 16);
+    assert(bytes[15] == 0x01);
+}
+
+void test_pkcs7_pad_17_bytes() {
+    std::vector<uint8_t> bytes(17, 0xAA);
+    pkcs7_pad(bytes);
+    assert(bytes.size() == 32);
+    for(size_t i = 17; i < 32; i++) assert(bytes[i] == 0x0F);
+}
+
+void test_pkcs7_roundtrip() {
+    std::vector<size_t> lengths = {0, 1, 15, 16, 17, 31, 32, 33};
+    for(size_t len : lengths) {
+        std::vector<uint8_t> original(len, 0x42);
+        std::vector<uint8_t> bytes = original;
+
+        pkcs7_pad(bytes);
+        pkcs7_unpad(bytes);
+
+        assert(bytes == original);
+    }
+}
+
+void test_cbc_mode_roundtrip() {
+    std::array<uint8_t,16> key = {
+        0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,
+        0x08,0x09,0x0a,0x0b,0x0c,0x0d,0x0e,0x0f
+    };
+
+    std::string message =
+        "The quick brown fox jumps over the lazy dog, "
+        "this is a longer message spanning multiple blocks!";
+
+    auto ciphertext = aes128_encrypt_cbc_mode(message, key);
+    std::string decrypted = aes128_decrypt_cbc_mode(ciphertext, key);
+
+    assert(decrypted == message);
+}
+
+void test_cbc_mode_short_message() {
+    std::array<uint8_t,16> key = {
+        0x2b,0x7e,0x15,0x16,0x28,0xae,0xd2,0xa6,
+        0xab,0xf7,0x15,0x88,0x09,0xcf,0x4f,0x3c
+    };
+
+    std::string message = "hi";
+
+    auto ciphertext = aes128_encrypt_cbc_mode(message, key);
+    std::string decrypted = aes128_decrypt_cbc_mode(ciphertext, key);
+
+    assert(decrypted == message);
+}
+
+void test_cbc_mode_empty_message() {
+    std::array<uint8_t,16> key = {
+        0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,
+        0x08,0x09,0x0a,0x0b,0x0c,0x0d,0x0e,0x0f
+    };
+
+    std::string message = "";
+
+    auto ciphertext = aes128_encrypt_cbc_mode(message, key);
+    std::string decrypted = aes128_decrypt_cbc_mode(ciphertext, key);
+
+    assert(decrypted == message);
+}
+
+void test_cbc_mode_boundary_lengths() {
+    std::array<uint8_t,16> key = {
+        0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,
+        0x08,0x09,0x0a,0x0b,0x0c,0x0d,0x0e,0x0f
+    };
+
+    std::vector<size_t> lengths = {
+        15,16,17,
+        31,32,33
+    };
+
+    for(size_t len : lengths) {
+        std::string message(len, 'x');
+
+        auto ciphertext = aes128_encrypt_cbc_mode(message, key);
+        auto decrypted = aes128_decrypt_cbc_mode(ciphertext, key);
+
+        assert(decrypted == message);
+        assert(decrypted.size() == len);
+    }
+}
+
+void test_cbc_padding_sizes() {
+    std::array<uint8_t,16> key = {
+        0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,
+        0x08,0x09,0x0a,0x0b,0x0c,0x0d,0x0e,0x0f
+    };
+
+    {
+        std::string msg = "";
+        auto ct = aes128_encrypt_cbc_mode(msg,key);
+        assert(ct.size() == 32);
+    }
+
+    {
+        std::string msg(16,'a');
+        auto ct = aes128_encrypt_cbc_mode(msg,key);
+        assert(ct.size() == 48);
+    }
+
+    {
+        std::string msg(17,'a');
+        auto ct = aes128_encrypt_cbc_mode(msg,key);
+        assert(ct.size() == 48);
+    }
+}
+
+void test_cbc_random_iv() {
+    std::array<uint8_t,16> key = {
+        0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,
+        0x08,0x09,0x0a,0x0b,0x0c,0x0d,0x0e,0x0f
+    };
+
+    std::string message = "same plaintext";
+
+    auto ct1 = aes128_encrypt_cbc_mode(message,key);
+    auto ct2 = aes128_encrypt_cbc_mode(message,key);
+
+    assert(ct1 != ct2);
+}
+
 int main() {
     // Tests for aes128 block implementation
     run_test("xtime", test_xtime);
@@ -388,7 +534,20 @@ int main() {
     run_test("inv_mix_col_fast_matches_original",test_inv_mix_col_fast_matches_original);
     run_test("shift_row_fast_matches_original",test_shift_row_fast_matches_original);
 
+    // Test for pkcs7 padding/unpadding
+    run_test("pkcs7_pad_15_bytes",test_pkcs7_pad_15_bytes);
+    run_test("pkcs7_pad_17_bytes",test_pkcs7_pad_17_bytes);
+    run_test("pkcs7_pad_empty",test_pkcs7_pad_empty);
+    run_test("pkcs7_pad_exact_block",test_pkcs7_pad_exact_block);
+    run_test("pkcs7_pad_roundtrip",test_pkcs7_roundtrip);
 
+    // Test for CBC mode
+    run_test("cbc_mode_roundtrip", test_cbc_mode_roundtrip);
+    run_test("cbc_mode_short_message", test_cbc_mode_short_message);
+    run_test("cbc_mode_empty_message", test_cbc_mode_empty_message);
+    run_test("cbc_mode_boundary_lengths", test_cbc_mode_boundary_lengths);
+    run_test("cbc_padding_sizes", test_cbc_padding_sizes);
+    run_test("cbc_random_iv", test_cbc_random_iv);
 
     std::cout << "\nAll tests passed!\n";
     return 0;
