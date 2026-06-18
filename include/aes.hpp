@@ -5,6 +5,7 @@
 #include <string>
 #include <random>
 #include <algorithm>
+#include <stdexcept>
 
 using Word = uint32_t;
 using State = std::array<Word,4>;

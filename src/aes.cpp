@@ -329,8 +329,14 @@ void pkcs7_pad(std::vector<uint8_t>& bytes){
 }
 
 void pkcs7_unpad(std::vector<uint8_t>& bytes){
-    uint8_t original_pad = bytes[bytes.size() - 1];
-    bytes.resize(bytes.size() - original_pad);
+    if(bytes.empty()) return;
+
+    uint8_t pad = bytes.back();
+
+    if(pad == 0 || pad > 16 || pad > bytes.size())
+        throw std::runtime_error("Invalid PKCS7 padding");
+
+    bytes.resize(bytes.size() - pad);
 }
 
 std::vector<uint8_t> aes128_encrypt_ctr_mode(const std::string& message, const std::array<uint8_t,16>& key){
