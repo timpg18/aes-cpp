@@ -42,8 +42,8 @@ static constexpr uint8_t RCON[10] = {
     0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1B, 0x36
 };
 
-inline uint8_t sub_bytes(const uint8_t x){return SBOX[x];}
-inline uint8_t inv_sub_bytes(const uint8_t x){return INV_SBOX[x];}
+uint8_t sub_bytes(const uint8_t x){return SBOX[x];}
+uint8_t inv_sub_bytes(const uint8_t x){return INV_SBOX[x];}
 
 constexpr std::array<uint8_t,256> make_mul_table(uint8_t multiplier){
     std::array<uint8_t,256> table{};
@@ -60,199 +60,175 @@ static constexpr std::array<uint8_t,256> MUL11 = make_mul_table(0x0b);
 static constexpr std::array<uint8_t,256> MUL13 = make_mul_table(0x0d);
 static constexpr std::array<uint8_t,256> MUL14 = make_mul_table(0x0e);
 
-
 // new
 Word mix_col_word(const Word& col){
-    uint8_t s0 = col[0];
-    uint8_t s1 = col[1];
-    uint8_t s2 = col[2];
-    uint8_t s3 = col[3];
+    uint8_t s0 = byte0(col);
+    uint8_t s1 = byte1(col);
+    uint8_t s2 = byte2(col);
+    uint8_t s3 = byte3(col);
 
-    Word newcol;
-    newcol[0] = MUL2[s0] ^ MUL3[s1] ^ s2 ^ s3;
-    newcol[1] = s0 ^ MUL2[s1] ^ MUL3[s2] ^ s3;
-    newcol[2] = s0 ^ s1 ^ MUL2[s2] ^ MUL3[s3];
-    newcol[3] = MUL3[s0] ^ s1 ^ s2 ^ MUL2[s3];
-
-    return newcol;
+    return pack_word(
+        MUL2[s0] ^ MUL3[s1] ^ s2 ^ s3,
+        s0 ^ MUL2[s1] ^ MUL3[s2] ^ s3,
+        s0 ^ s1 ^ MUL2[s2] ^ MUL3[s3],
+        MUL3[s0] ^ s1 ^ s2 ^ MUL2[s3]
+    );
 }
 
 Word inv_mix_col_word(const Word& col){
-    uint8_t s0 = col[0];
-    uint8_t s1 = col[1];
-    uint8_t s2 = col[2];
-    uint8_t s3 = col[3];
+    uint8_t s0 = byte0(col);
+    uint8_t s1 = byte1(col);
+    uint8_t s2 = byte2(col);
+    uint8_t s3 = byte3(col);
 
-    std::array<uint8_t,4> newcol;
-    newcol[0] = MUL14[s0] ^ MUL11[s1] ^ MUL13[s2] ^ MUL9[s3];
-    newcol[1] = MUL9[s0] ^ MUL14[s1] ^ MUL11[s2] ^ MUL13[s3];
-    newcol[2] = MUL13[s0] ^ MUL9[s1] ^ MUL14[s2] ^ MUL11[s3];
-    newcol[3] = MUL11[s0] ^ MUL13[s1] ^ MUL9[s2] ^ MUL14[s3];
-
-    return newcol;
+    return pack_word(
+        MUL14[s0] ^ MUL11[s1] ^ MUL13[s2] ^ MUL9[s3],
+        MUL9[s0]  ^ MUL14[s1] ^ MUL11[s2] ^ MUL13[s3],
+        MUL13[s0] ^ MUL9[s1]  ^ MUL14[s2] ^ MUL11[s3],
+        MUL11[s0] ^ MUL13[s1] ^ MUL9[s2]  ^ MUL14[s3]
+    );
 }
 
 State mix_col_state(const State& state){
-    State new_state;
-    for(size_t word = 0; word < 4; word++){
-        Word temp = Word{state[0][word],state[1][word],state[2][word],state[3][word]};
-        temp = mix_col_word(temp);
-        new_state[0][word] = temp[0];
-        new_state[1][word] = temp[1];
-        new_state[2][word] = temp[2];
-        new_state[3][word] = temp[3];
-    }
-    return new_state;
+    return {mix_col_word(state[0]),
+            mix_col_word(state[1]),
+            mix_col_word(state[2]),
+            mix_col_word(state[3])};
 }
 
 State inv_mix_col_state(const State& state){
-    State new_state;
-    for(size_t col = 0; col < 4; col++){
-        Word temp = {state[0][col], state[1][col], state[2][col], state[3][col]};
-        temp = inv_mix_col_word(temp);
-        new_state[0][col] = temp[0];
-        new_state[1][col] = temp[1];
-        new_state[2][col] = temp[2];
-        new_state[3][col] = temp[3];
-    }
-    return new_state;
+    return {inv_mix_col_word(state[0]),
+            inv_mix_col_word(state[1]),
+            inv_mix_col_word(state[2]),
+            inv_mix_col_word(state[3])};
 }
 
 State shift_row(const State& state){
-    State new_state;
-
-    // row 0: no shift
-    new_state[0][0] = state[0][0];
-    new_state[0][1] = state[0][1];
-    new_state[0][2] = state[0][2];
-    new_state[0][3] = state[0][3];
-
-    // row 1: shift left by 1
-    new_state[1][0] = state[1][1];
-    new_state[1][1] = state[1][2];
-    new_state[1][2] = state[1][3];
-    new_state[1][3] = state[1][0];
-
-    // row 2: shift left by 2
-    new_state[2][0] = state[2][2];
-    new_state[2][1] = state[2][3];
-    new_state[2][2] = state[2][0];
-    new_state[2][3] = state[2][1];
-
-    // row 3: shift left by 3
-    new_state[3][0] = state[3][3];
-    new_state[3][1] = state[3][0];
-    new_state[3][2] = state[3][1];
-    new_state[3][3] = state[3][2];
-
-    return new_state;
+    return {
+        pack_word(
+            byte0(state[0]),
+            byte1(state[1]),
+            byte2(state[2]),
+            byte3(state[3])
+        ),
+        pack_word(
+            byte0(state[1]),
+            byte1(state[2]),
+            byte2(state[3]),
+            byte3(state[0])
+        ),
+        pack_word(
+            byte0(state[2]),
+            byte1(state[3]),
+            byte2(state[0]),
+            byte3(state[1])
+        ),
+        pack_word(
+            byte0(state[3]),
+            byte1(state[0]),
+            byte2(state[1]),
+            byte3(state[2])
+        )
+    };
 }
 
 State inv_shift_row(const State& state){
-    State new_state;
-
-    // row 0: no shift
-    new_state[0][0] = state[0][0];
-    new_state[0][1] = state[0][1];
-    new_state[0][2] = state[0][2];
-    new_state[0][3] = state[0][3];
-
-    // row 1: shift right by 1
-    new_state[1][0] = state[1][3];
-    new_state[1][1] = state[1][0];
-    new_state[1][2] = state[1][1];
-    new_state[1][3] = state[1][2];
-
-    // row 2: shift right by 2
-    new_state[2][0] = state[2][2];
-    new_state[2][1] = state[2][3];
-    new_state[2][2] = state[2][0];
-    new_state[2][3] = state[2][1];
-
-    // row 3: shift right by 3 (= left by 1)
-    new_state[3][0] = state[3][1];
-    new_state[3][1] = state[3][2];
-    new_state[3][2] = state[3][3];
-    new_state[3][3] = state[3][0];
-
-    return new_state;
+    return {
+        pack_word(
+            byte0(state[0]),
+            byte1(state[3]),
+            byte2(state[2]),
+            byte3(state[1])
+        ),
+        pack_word(
+            byte0(state[1]),
+            byte1(state[0]),
+            byte2(state[3]),
+            byte3(state[2])
+        ),
+        pack_word(
+            byte0(state[2]),
+            byte1(state[1]),
+            byte2(state[0]),
+            byte3(state[3])
+        ),
+        pack_word(
+            byte0(state[3]),
+            byte1(state[2]),
+            byte2(state[1]),
+            byte3(state[0])
+        )
+    };
 }
 
-State sub_bytes_state(const State& state) {
-    State new_state;
-    for(int r = 0; r < 4; r++)
-        for(int c = 0; c < 4; c++)
-            new_state[r][c] = sub_bytes(state[r][c]);
-    return new_state;
+Word sub_word(const Word& word){
+    return (static_cast<uint32_t>(SBOX[(word >> 24) & 0xFF]) << 24) |
+           (static_cast<uint32_t>(SBOX[(word >> 16) & 0xFF]) << 16) |
+           (static_cast<uint32_t>(SBOX[(word >>  8) & 0xFF]) <<  8) |
+           (static_cast<uint32_t>(SBOX[(word      ) & 0xFF]));
 }
 
-State inv_sub_bytes_state(const State& state) {
-    State new_state;
-    for(int r = 0; r < 4; r++)
-        for(int c = 0; c < 4; c++)
-            new_state[r][c] = inv_sub_bytes(state[r][c]);
-    return new_state;
+Word inv_sub_word(const Word& word){
+    return (static_cast<uint32_t>(INV_SBOX[(word >> 24) & 0xFF]) << 24) |
+           (static_cast<uint32_t>(INV_SBOX[(word >> 16) & 0xFF]) << 16) |
+           (static_cast<uint32_t>(INV_SBOX[(word >>  8) & 0xFF]) <<  8) |
+           (static_cast<uint32_t>(INV_SBOX[(word      ) & 0xFF]));
+}
+
+State sub_bytes_state(const State& state){
+    return {
+        sub_word(state[0]),
+        sub_word(state[1]),
+        sub_word(state[2]),
+        sub_word(state[3])
+    };
+}
+
+State inv_sub_bytes_state(const State& state){
+    return {
+        inv_sub_word(state[0]),
+        inv_sub_word(state[1]),
+        inv_sub_word(state[2]),
+        inv_sub_word(state[3])
+    };
 }
 
 State add_round_key(const State& state, const State& round_key){
     State new_state;
-
     for(size_t row = 0; row < 4; row++){
-        for(size_t col = 0; col < 4; col++){
-            new_state[row][col] = state[row][col] ^ round_key[row][col];
-        }
+        new_state[row] = state[row] ^ round_key[row];    
     }
     return new_state;
 }
 
 Word rot_word(const Word& word){
-    Word new_word;
-    new_word[0] = word[1];
-    new_word[1] = word[2];
-    new_word[2] = word[3];
-    new_word[3] = word[0];
-    return new_word;
-}
-
-Word sub_word(const Word& word){
-    Word new_word;
-    new_word[0] = sub_bytes(word[0]);
-    new_word[1] = sub_bytes(word[1]);
-    new_word[2] = sub_bytes(word[2]);
-    new_word[3] = sub_bytes(word[3]);
-    return new_word;
+    return (word << 8) | (word >> 24);
 }
 
 std::array<State,11> key_expansion(const std::array<uint8_t,16>& key){
     std::array<Word,44> words;
-    for(size_t row = 0; row < 4; row++){
-        for(size_t col = 0; col < 4; col++){
-            words[row][col] = key[4*row + col];
-        }
-    }
+    words[0] = pack_word(key[0],key[1],key[2],key[3]);
+    words[1] = pack_word(key[4],key[5],key[6],key[7]);
+    words[2] = pack_word(key[8],key[9],key[10],key[11]);
+    words[3] = pack_word(key[12],key[13],key[14],key[15]);
 
     // main loop
     for(size_t i = 4; i < 44; i++){
         Word temp = words[i - 1];
-
         if(i % 4 == 0){
             temp = rot_word(temp);
             temp = sub_word(temp);
-            temp[0] ^= RCON[i/4 - 1];
+            temp ^= (static_cast<uint32_t>(RCON[i/4 - 1]) << 24);
         }
-
-        for(size_t j = 0; j < 4; j++){
-            words[i][j] = words[i - 4][j] ^ temp[j];
-        }
+        words[i] = words[i - 4] ^ temp;
+        
     }
 
     // conversion to State
     std::array<State,11> expanded_key;
     for( size_t key_no = 0; key_no < 11; key_no++ ){
-        for(size_t col = 0; col < 4; col++){
-            for(size_t row = 0; row < 4; row++){
-                expanded_key[key_no][row][col] = words[key_no*4 + col][row];
-            }
+        for(size_t row = 0; row < 4; row++){
+            expanded_key[key_no][row] = words[key_no*4 + row];
         }
     }
 
@@ -261,21 +237,28 @@ std::array<State,11> key_expansion(const std::array<uint8_t,16>& key){
 
 State bytes_to_state(const std::array<uint8_t,16>& bytes){
     State state;
+
     for(size_t col = 0; col < 4; col++){
-        for(size_t row = 0; row < 4; row++){
-            state[row][col] = bytes[row + 4 * col];
-        }
+        state[col] =
+            (static_cast<uint32_t>(bytes[4*col + 0]) << 24) |
+            (static_cast<uint32_t>(bytes[4*col + 1]) << 16) |
+            (static_cast<uint32_t>(bytes[4*col + 2]) << 8 ) |
+            (static_cast<uint32_t>(bytes[4*col + 3]));
     }
+
     return state;
 }
 
 std::array<uint8_t,16> state_to_bytes(const State& state){
     std::array<uint8_t,16> bytes;
+
     for(size_t col = 0; col < 4; col++){
-        for(size_t row = 0; row < 4; row++){
-            bytes[row + 4 * col] = state[row][col];
-        }
+        bytes[4*col + 0] = static_cast<uint8_t>((state[col] >> 24) & 0xFF);
+        bytes[4*col + 1] = static_cast<uint8_t>((state[col] >> 16) & 0xFF);
+        bytes[4*col + 2] = static_cast<uint8_t>((state[col] >> 8 ) & 0xFF);
+        bytes[4*col + 3] = static_cast<uint8_t>( state[col]        & 0xFF);
     }
+
     return bytes;
 }
 
