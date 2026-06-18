@@ -5,9 +5,24 @@
 #include <string>
 #include <random>
 #include <algorithm>
+#include <stdexcept>
 
-using Word = std::array<uint8_t,4>;
+using Word = uint32_t;
 using State = std::array<Word,4>;
+
+// Helper Functions
+inline uint32_t pack_word(uint8_t b0,uint8_t b1,uint8_t b2,uint8_t b3){
+    return (uint32_t(b0)<<24) |
+           (uint32_t(b1)<<16) |
+           (uint32_t(b2)<<8 ) |
+            uint32_t(b3);
+}
+
+inline uint8_t byte0(uint32_t w){ return (w>>24)&0xff; }
+inline uint8_t byte1(uint32_t w){ return (w>>16)&0xff; }
+inline uint8_t byte2(uint32_t w){ return (w>>8 )&0xff; }
+inline uint8_t byte3(uint32_t w){ return w&0xff; }
+
 
 constexpr uint8_t xtime(const uint8_t b){return (b & 0x80) ? ((b << 1) ^ 0x1B ) : (b<<1);}
 constexpr uint8_t gmul(const uint8_t a,const uint8_t b){
