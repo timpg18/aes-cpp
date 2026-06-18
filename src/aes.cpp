@@ -42,19 +42,25 @@ static constexpr uint8_t RCON[10] = {
     0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1B, 0x36
 };
 
-inline uint8_t xtime(const uint8_t b){return (b & 0x80) ? ((b << 1) ^ 0x1B ) : (b<<1);}
-inline uint8_t gmul(const uint8_t a,const uint8_t b){
-    uint8_t res = 0;
-    uint8_t b_curr = b;
-    for(int i = 0;i<8;i++){
-        if((a>>i) & 1) res ^=b_curr;
-        b_curr = xtime(b_curr);
-    }
-    return res;
-}
-inline uint8_t sub_bytes(const uint8_t x){return SBOX[x];}
-inline uint8_t inv_sub_bytes(const uint8_t x){return INV_SBOX[x];}
+uint8_t sub_bytes(const uint8_t x){return SBOX[x];}
+uint8_t inv_sub_bytes(const uint8_t x){return INV_SBOX[x];}
 
+constexpr std::array<uint8_t,256> make_mul_table(uint8_t multiplier){
+    std::array<uint8_t,256> table{};
+    for(int i = 0; i < 256; i++){
+        table[i] = gmul(multiplier, static_cast<uint8_t>(i));
+    }
+    return table;
+}
+
+static constexpr std::array<uint8_t,256> MUL2 = make_mul_table(0x02);
+static constexpr std::array<uint8_t,256> MUL3 = make_mul_table(0x03);
+static constexpr std::array<uint8_t,256> MUL9  = make_mul_table(0x09);
+static constexpr std::array<uint8_t,256> MUL11 = make_mul_table(0x0b);
+static constexpr std::array<uint8_t,256> MUL13 = make_mul_table(0x0d);
+static constexpr std::array<uint8_t,256> MUL14 = make_mul_table(0x0e);
+
+// original
 Word mix_col_word(const Word& col){
     uint8_t s0 = col[0];
     uint8_t s1 = col[1];
@@ -66,6 +72,22 @@ Word mix_col_word(const Word& col){
     newcol[1] = s0 ^ gmul(0x02,s1) ^ gmul(0x03,s2) ^ s3;
     newcol[2] = s0 ^ s1 ^ gmul(0x02,s2) ^ gmul(0x03,s3);
     newcol[3] = gmul(0x03,s0) ^ s1 ^ s2 ^ gmul(0x02,s3);
+
+    return newcol;
+}
+
+// new
+Word mix_col_word_fast(const Word& col){
+    uint8_t s0 = col[0];
+    uint8_t s1 = col[1];
+    uint8_t s2 = col[2];
+    uint8_t s3 = col[3];
+
+    Word newcol;
+    newcol[0] = MUL2[s0] ^ MUL3[s1] ^ s2 ^ s3;
+    newcol[1] = s0 ^ MUL2[s1] ^ MUL3[s2] ^ s3;
+    newcol[2] = s0 ^ s1 ^ MUL2[s2] ^ MUL3[s3];
+    newcol[3] = MUL3[s0] ^ s1 ^ s2 ^ MUL2[s3];
 
     return newcol;
 }
@@ -85,6 +107,21 @@ Word inv_mix_col_word(const Word& col){
     return newcol;
 }
 
+Word inv_mix_col_word_fast(const Word& col){
+    uint8_t s0 = col[0];
+    uint8_t s1 = col[1];
+    uint8_t s2 = col[2];
+    uint8_t s3 = col[3];
+
+    std::array<uint8_t,4> newcol;
+    newcol[0] = MUL14[s0] ^ MUL11[s1] ^ MUL13[s2] ^ MUL9[s3];
+    newcol[1] = MUL9[s0] ^ MUL14[s1] ^ MUL11[s2] ^ MUL13[s3];
+    newcol[2] = MUL13[s0] ^ MUL9[s1] ^ MUL14[s2] ^ MUL11[s3];
+    newcol[3] = MUL11[s0] ^ MUL13[s1] ^ MUL9[s2] ^ MUL14[s3];
+
+    return newcol;
+}
+
 State mix_col_state(const State& state){
     State new_state;
     for(size_t word = 0; word < 4; word++){
@@ -98,11 +135,37 @@ State mix_col_state(const State& state){
     return new_state;
 }
 
+State mix_col_state_fast(const State& state){
+    State new_state;
+    for(size_t word = 0; word < 4; word++){
+        Word temp = Word{state[0][word],state[1][word],state[2][word],state[3][word]};
+        temp = mix_col_word_fast(temp);
+        new_state[0][word] = temp[0];
+        new_state[1][word] = temp[1];
+        new_state[2][word] = temp[2];
+        new_state[3][word] = temp[3];
+    }
+    return new_state;
+}
+
 State inv_mix_col_state(const State& state){
     State new_state;
     for(size_t col = 0; col < 4; col++){
         Word temp = {state[0][col], state[1][col], state[2][col], state[3][col]};
         temp = inv_mix_col_word(temp);
+        new_state[0][col] = temp[0];
+        new_state[1][col] = temp[1];
+        new_state[2][col] = temp[2];
+        new_state[3][col] = temp[3];
+    }
+    return new_state;
+}
+
+State inv_mix_col_state_fast(const State& state){
+    State new_state;
+    for(size_t col = 0; col < 4; col++){
+        Word temp = {state[0][col], state[1][col], state[2][col], state[3][col]};
+        temp = inv_mix_col_word_fast(temp);
         new_state[0][col] = temp[0];
         new_state[1][col] = temp[1];
         new_state[2][col] = temp[2];

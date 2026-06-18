@@ -32,6 +32,7 @@ int main(){
     double t_sub = time_function(sub_bytes_state, state, iterations);
     double t_shift = time_function(shift_row, state, iterations);
     double t_mix = time_function(mix_col_state, state, iterations);
+    double t_mix_fast = time_function(mix_col_state_fast, state, iterations);
 
     // add_round_key needs two args, so timed separately
     auto start = std::chrono::high_resolution_clock::now();
@@ -51,7 +52,10 @@ int main(){
     std::cout << "sub_bytes_state: " << (t_sub/total)*100  << "%\n";
     std::cout << "shiftrow:        " << (t_shift/total)*100 << "%\n";
     std::cout << "mix_columns:     " << (t_mix/total)*100  << "%\n";
-    std::cout << "add_round_key:   " << (t_add/total)*100  << "%\n";
+    std::cout << "add_round_key:   " << (t_add/total)*100  << "%\n\n";
+
+    std::cout << "mix_columns (fast):     " << t_mix_fast << " s\n";
+    std::cout << "Speedup: " << (t_mix / t_mix_fast) << "x\n";
 
     return 0;
 }

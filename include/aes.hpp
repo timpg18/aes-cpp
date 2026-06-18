@@ -9,12 +9,31 @@
 using Word = std::array<uint8_t,4>;
 using State = std::array<Word,4>;
 
-uint8_t xtime(uint8_t b);
-uint8_t gmul(uint8_t a, uint8_t b);
+constexpr uint8_t xtime(const uint8_t b){return (b & 0x80) ? ((b << 1) ^ 0x1B ) : (b<<1);}
+constexpr uint8_t gmul(const uint8_t a,const uint8_t b){
+    uint8_t res = 0;
+    uint8_t b_curr = b;
+    for(int i = 0;i<8;i++){
+        if((a>>i) & 1) res ^=b_curr;
+        b_curr = xtime(b_curr);
+    }
+    return res;
+}
+
 Word mix_col_word(const Word& col);
 Word inv_mix_col_word(const Word& col);
+State mix_col_state(const State& state);
+State inv_mix_col_state(const State& state);
+
+// New for implementation
+Word mix_col_word_fast(const Word& col);
+State mix_col_state_fast(const State& state);
+Word inv_mix_col_word_fast(const Word& col);
+State inv_mix_col_state_fast(const State& state);
+
 State shift_row(const State& state);
 uint8_t sub_bytes(const uint8_t x);
+uint8_t inv_sub_bytes(const uint8_t x);
 State sub_bytes_state(const State& state);
 State inv_sub_bytes_state(const State& state);
 State add_round_key(const State& state, const State& round_key);
@@ -23,8 +42,6 @@ Word sub_word(const Word& word);
 std::array<State,11> key_expansion(const std::array<uint8_t,16>& key);
 State bytes_to_state(const std::array<uint8_t,16>& bytes);
 std::array<uint8_t,16> state_to_bytes(const State& state);
-State mix_col_state(const State& state);
-State inv_mix_col_state(const State& state);
 State inv_shift_row(const State& state);
 
 std::array<uint8_t,16> aes128_encrypt_block(const std::array<uint8_t,16>& plaintext,const std::array<uint8_t,16>& key);

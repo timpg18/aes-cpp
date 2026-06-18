@@ -319,6 +319,29 @@ void test_ctr_mode_binary_data() {
     assert(decrypted == s);
 }
 
+void test_mix_col_fast_matches_original() {
+    std::array<uint8_t,4> in = {0xdb, 0x13, 0x53, 0x45};
+    assert(mix_col_word(in) == mix_col_word_fast(in));
+
+    // a few more arbitrary columns
+    std::array<uint8_t,4> in2 = {0x01, 0x02, 0x03, 0x04};
+    assert(mix_col_word(in2) == mix_col_word_fast(in2));
+
+    std::array<uint8_t,4> in3 = {0xff, 0x00, 0x80, 0x7f};
+    assert(mix_col_word(in3) == mix_col_word_fast(in3));
+}
+
+void test_inv_mix_col_fast_matches_original() {
+    Word in1 = {0xdb, 0x13, 0x53, 0x45};
+    assert(inv_mix_col_word(in1) == inv_mix_col_word_fast(in1));
+
+    Word in2 = {0x01, 0x02, 0x03, 0x04};
+    assert(inv_mix_col_word(in2) == inv_mix_col_word_fast(in2));
+
+    Word in3 = {0xff, 0x00, 0x80, 0x7f};
+    assert(inv_mix_col_word(in3) == inv_mix_col_word_fast(in3));
+}
+
 int main() {
     // Tests for aes128 block implementation
     run_test("xtime", test_xtime);
@@ -343,6 +366,10 @@ int main() {
     run_test("ctr_mode_empty_message",test_ctr_mode_empty_message);
     run_test("ctr_mode_boundary_lengths",test_ctr_mode_boundary_lengths); 
     run_test("ctr_mode_binary_data",test_ctr_mode_binary_data);
+
+    // Test for new function
+    run_test("mix_col_fast_matches_original",test_mix_col_fast_matches_original);
+    run_test("inv_mix_col_fast_matches_original",test_inv_mix_col_fast_matches_original);
 
 
 
